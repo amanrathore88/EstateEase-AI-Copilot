@@ -28,6 +28,41 @@ const convertNumbersToSpokenIndian = (text, isHindiMode) => {
   });
 };
 
+// Localized welcome greeting helper for English, Hindi, and Hinglish across roles
+const getWelcomeMessage = (role, language) => {
+  const isHindi = language === 'hindi';
+  const isHinglish = language === 'hinglish';
+
+  if (role === 'admin') {
+    if (isHindi) {
+      return 'नमस्ते व्यवस्थापक! मैं आपका प्लेटफ़ॉर्म को-पायलट हूँ। मैं आंकड़े देखने, उपयोगकर्ता गतिविधि का विश्लेषण करने या एडमिन पैनल नेविगेट करने में आपकी मदद कर सकता हूँ। आज मैं आपकी क्या सहायता करूँ?';
+    }
+    if (isHinglish) {
+      return 'Welcome, Administrator! Main aapka platform co-pilot hoon. Main platform stats dekhne, user activity analyze karne ya admin panel navigate karne me help kar sakta hoon. Aaj main aapki kya assist kar sakta hoon?';
+    }
+    return 'Welcome, Administrator. I am your platform co-pilot. I can help you query statistics, analyze user activity, or navigate the admin panel. How can I assist you today?';
+  }
+
+  if (role === 'seller') {
+    if (isHindi) {
+      return 'नमस्ते! मैं आपका लिस्टिंग और प्राइसिंग को-पायलट हूँ। मैं प्रॉपर्टी डिस्क्रिप्शन लिखने, उचित मूल्य का अनुमान लगाने या आपकी लिस्टिंग्स मैनेज करने में मदद कर सकता हूँ। आज मैं आपकी क्या मदद करूँ?';
+    }
+    if (isHinglish) {
+      return 'Hello, Seller! Main aapka listing aur pricing co-pilot hoon. Main property descriptions likhne, fair market value estimate karne ya aapki listings manage karne me help kar sakta hoon. Aaj main aapki kya help kar sakta hoon?';
+    }
+    return 'Hello, Seller. I am your listing and pricing co-pilot. I can help you write property descriptions, estimate fair market values, or manage your listings. How can I help you today?';
+  }
+
+  // Buyer / General default
+  if (isHindi) {
+    return 'नमस्ते! मैं EstateEase AI हूँ, आपका प्रॉपर्टी को-पायलट। बताइए आज मैं आपकी क्या मदद कर सकता हूँ?';
+  }
+  if (isHinglish) {
+    return 'Hi! Main EstateEase AI hoon, aapka property co-pilot. Batayein aaj main aapki kya help kar sakta hoon?';
+  }
+  return 'Hi! I am EstateEase AI, your property co-pilot. Let me know how I can help you today!';
+};
+
 const AIChatWidget = () => {
   const { token, user } = useAuth();
   const location = useLocation();
@@ -103,6 +138,11 @@ const AIChatWidget = () => {
       const persisted = localStorage.getItem(msgKey);
       if (persisted) savedMsgs = JSON.parse(persisted);
     } catch (e) {}
+
+    const role = user?.role || 'buyer';
+    if (savedLang && (savedMsgs.length === 0 || (savedMsgs.length === 1 && savedMsgs[0].sender === 'ai'))) {
+      savedMsgs = [{ sender: 'ai', text: getWelcomeMessage(role, savedLang) }];
+    }
     setMessages(savedMsgs);
 
     // Load conversation state
@@ -207,28 +247,22 @@ const AIChatWidget = () => {
     };
   }, []);
 
-  // Set welcome message if history is empty
+  // Set welcome message if history is empty or contains only initial greeting
   useEffect(() => {
     if (!selectedLanguage) return;
-    if (messages.length > 0) return;
-
     const role = user?.role || 'buyer';
-    let welcomeText = '';
 
-    if (role === 'admin') {
-      welcomeText = 'Welcome, Administrator. I am your platform co-pilot. I can help you query statistics, analyze user activity, or navigate the admin panel. How can I assist you today?';
-    } else if (role === 'seller') {
-      welcomeText = 'Hello, Seller. I am your listing and pricing co-pilot. I can help you write property descriptions, estimate fair market values, or manage your listings. How can I help you today?';
-    } else {
-      welcomeText = 'Hi! I am EstateEase AI, your property co-pilot. Let me know how I can help you today!';
-    }
-
-    setMessages([
-      {
-        sender: 'ai',
-        text: welcomeText
+    setMessages(prev => {
+      if (prev.length === 0 || (prev.length === 1 && prev[0].sender === 'ai')) {
+        return [
+          {
+            sender: 'ai',
+            text: getWelcomeMessage(role, selectedLanguage)
+          }
+        ];
       }
-    ]);
+      return prev;
+    });
   }, [selectedLanguage, user]);
 
   // Sync suggestions on reload and state updates
@@ -352,7 +386,6 @@ const AIChatWidget = () => {
     setConversationState(defaultState);
     setHasLeadError(false);
     
-    let welcomeText = '';
     let initialSugs = [];
     const role = user?.role || 'buyer';
 
@@ -366,8 +399,9 @@ const AIChatWidget = () => {
       }
     }
 
+    const welcomeText = getWelcomeMessage(role, selectedLanguage || 'english');
+
     if (role === 'admin') {
-      welcomeText = 'Welcome, Administrator. I am your platform co-pilot. I can help you query statistics, analyze user activity, or navigate the admin panel. How can I assist you today?';
       if (initialSugs.length === 0) {
         initialSugs = [
           { label: "📊 Show platform stats", value: "Show platform stats" },
@@ -376,7 +410,6 @@ const AIChatWidget = () => {
         ];
       }
     } else if (role === 'seller') {
-      welcomeText = 'Hello, Seller. I am your listing and pricing co-pilot. I can help you write property descriptions, estimate fair market values, or manage your listings. How can I help you today?';
       if (initialSugs.length === 0) {
         initialSugs = [
           { label: "💰 What is my home worth?", value: "What is my home worth?" },
@@ -385,7 +418,6 @@ const AIChatWidget = () => {
         ];
       }
     } else {
-      welcomeText = 'Hi! I am EstateEase AI, your property co-pilot. Let know how I can help you today!';
       if (initialSugs.length === 0) {
         initialSugs = [
           { label: "🏠 Buy a home", value: "Buy a home" },
@@ -417,6 +449,17 @@ const AIChatWidget = () => {
     const userId = user?._id || 'guest';
     localStorage.setItem(`ai_chat_language_${userId}`, lang);
     setSelectedLanguage(lang);
+
+    const role = user?.role || 'buyer';
+    const newWelcomeText = getWelcomeMessage(role, lang);
+
+    setMessages(prev => {
+      // If messages list is empty, or only contains the initial AI greeting, update it to the selected language
+      if (prev.length === 0 || (prev.length === 1 && prev[0].sender === 'ai')) {
+        return [{ sender: 'ai', text: newWelcomeText }];
+      }
+      return prev;
+    });
   };
 
   // Text-to-Speech (TTS) Helper

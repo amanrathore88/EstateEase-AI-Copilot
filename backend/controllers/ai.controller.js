@@ -710,13 +710,14 @@ export const chatWithAssistant = async (req, res) => {
       INSTRUCTIONS:
       1. Extract any mentioned attributes and return them in JSON.
       2. The extracted 'intent' field must be one of:
-         - "buyer" (if they want to buy, purchase, find a house/flat to buy)
-         - "seller" (if they want to sell, list, list property, or value their home / ask what their home is worth)
+         - "buyer" (if they want to buy, purchase, find a property to buy)
+         - "seller" (if they want to sell, list property, or value their home / ask what their home is worth)
          - "renter" (if they want to rent a property or look for rental)
          - "agent" (if they request to speak with an agent directly)
          - null if not specified.
       3. Keep values normalized to English tags where possible:
-         - propertyType: "flat" | "apartment" | "villa" | "house" | "commercial" | "plot"
+         - propertyType: "apartment" | "flat" | "villa" | "house" | "penthouse" | "commercial" | "plot"
+           CRITICAL: Generic terms like "home", "ghar", "property", "place", or flow starters like "Buy a home", "Sell a home", "Rent a property" DO NOT indicate a propertyType! Return null for propertyType unless the user explicitly names a specific property type (e.g. apartment, flat, villa, penthouse, commercial, plot, or independent house). If the user says "Buy a home" or "ghar khareedna", propertyType MUST be null.
          - bedrooms: e.g. "1 BHK", "2 BHK", "3 BHK", "4+ BHK"
          - timeline: extract timeline in standard ranges like "Immediately", "1-3 Months", "3-6 Months", "6+ Months" or "Just Exploring"
          - budget: extract the budget text as a clean string (e.g. "Under ₹50L", "₹50L - ₹1Cr", "₹1Cr - ₹2Cr", "₹2Cr+", or rent price).
@@ -759,8 +760,44 @@ export const chatWithAssistant = async (req, res) => {
       }
     }
 
+    // Sanitize propertyType: generic terms like "home", "ghar", "property", "place" are NOT property types
+    if (extracted.propertyType) {
+      const genericTypeWords = ["home", "property", "ghar", "place", "real estate", "rental", "house/home"];
+      const val = extracted.propertyType.trim().toLowerCase();
+      if (genericTypeWords.includes(val)) {
+        extracted.propertyType = null;
+      }
+    }
+
     // Direct mapping bypass only applies if the user is NOT asking a specific question
-    const isFlowStarter = lowerMessage.includes("worth") || lowerMessage.includes("sell a home") || lowerMessage.includes("buy a home") || lowerMessage.includes("looking for a rental") || lowerMessage.includes("speak with an agent");
+    const isFlowStarter = lowerMessage.includes("worth") || lowerMessage.includes("sell a home") || lowerMessage.includes("buy a home") || lowerMessage.includes("looking for a rental") || lowerMessage.includes("rent a property") || lowerMessage.includes("speak with an agent");
+    
+    // Check if message matches any welcome option
+    let isWelcomeOptionMatch = false;
+    if (customConfig && customConfig.options) {
+      const allOpts = [
+        ...(customConfig.options.buyer || []),
+        ...(customConfig.options.seller || []),
+        ...(customConfig.options.admin || []),
+        ...(Array.isArray(customConfig.options) ? customConfig.options : [])
+      ];
+      isWelcomeOptionMatch = allOpts.some(o => 
+        (o.value && o.value.trim().toLowerCase() === lowerMessage) ||
+        (o.label && o.label.trim().toLowerCase() === lowerMessage)
+      );
+    }
+
+    // When starting a flow or clicking a welcome option, do not let generic words be interpreted as propertyType
+    if (isFlowStarter || isWelcomeOptionMatch || (!currentState?.activeQuestion || currentState?.activeQuestion?.field === "intent")) {
+      const explicitTypeRegex = /\b(apartment|flat|villa|penthouse|commercial|plot|duplex|studio|kothi|farmhouse|independent house)\b/i;
+      if (!explicitTypeRegex.test(message)) {
+        extracted.propertyType = null;
+        if (state.propertyType === "home" || state.propertyType === "property") {
+          state.propertyType = "";
+        }
+      }
+    }
+
     const isQuestionText = !isFlowStarter && /\b(how|what|why|who|where|when|which|how many|kitni|kitne|total|pending|approve|show|list|active|block|received|aaye|aaya|receive|unseen|unread)\b/i.test(message);
     const userIsAskingQuestion = (extracted.userQueryOverride !== null && extracted.userQueryOverride !== "") || isQuestionText;
 
