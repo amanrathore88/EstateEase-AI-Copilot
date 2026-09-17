@@ -134,6 +134,82 @@ const defaultFlowConfig = {
   }
 };
 
+const defaultSellerQuestions = {
+  city: {
+    text_en: "Where is your property located (which city)?",
+    text_hi: "आपकी प्रॉपर्टी किस शहर में स्थित है?",
+    text_hg: "Aapki property kis city me located hai?",
+    suggestions: [
+      { label: "📍 Delhi", value: "Delhi" },
+      { label: "📍 Noida", value: "Noida" },
+      { label: "📍 Gurugram", value: "Gurugram" },
+      { label: "📍 Mumbai", value: "Mumbai" }
+    ]
+  },
+  locality: {
+    text_en: "Which locality or area is your property located in?",
+    text_hi: "आपकी प्रॉपर्टी किस इलाके या क्षेत्र में स्थित है?",
+    text_hg: "Aapki property kis area ya locality me located hai?",
+    suggestions: []
+  },
+  propertyType: {
+    text_en: "What type of property do you want to sell/list?",
+    text_hi: "आप किस प्रकार की प्रॉपर्टी बेचना या लिस्ट करना चाहते हैं?",
+    text_hg: "Aap kis type ki property sell ya list karna chahte hain?",
+    suggestions: [
+      { label: "Flat/Apartment", value: "apartment" },
+      { label: "Villa/House", value: "house" },
+      { label: "Penthouse", value: "penthouse" },
+      { label: "Commercial property", value: "commercial" },
+      { label: "Plot / Land", value: "plot" }
+    ]
+  },
+  bedrooms: {
+    text_en: "How many bedrooms does your property have?",
+    text_hi: "आपकी प्रॉपर्टी में कितने बेडरूम हैं?",
+    text_hg: "Aapki property me kitne bedrooms hain?",
+    suggestions: [
+      { label: "1 BHK", value: "1 BHK" },
+      { label: "2 BHK", value: "2 BHK" },
+      { label: "3 BHK", value: "3 BHK" },
+      { label: "4+ BHK", value: "4+ BHK" }
+    ]
+  },
+  propertySize: {
+    text_en: "What is the approximate size of your property?",
+    text_hi: "आपकी प्रॉपर्टी का अनुमानित आकार क्या है?",
+    text_hg: "Aapki property ka approximate size kya hai?",
+    suggestions: [
+      { label: "Under 1,000 sq ft", value: "Under 1,000 sq ft" },
+      { label: "1,000–1,500 sq ft", value: "1,000–1,500 sq ft" },
+      { label: "1,500–2,500 sq ft", value: "1,500–2,500 sq ft" },
+      { label: "2,500+ sq ft", value: "2,500+ sq ft" }
+    ]
+  },
+  budget: {
+    text_en: "What is your expected selling price for the property?",
+    text_hi: "आपकी प्रॉपर्टी का अपेक्षित विक्रय मूल्य क्या है?",
+    text_hg: "Aapka expected selling price kya hai?",
+    suggestions: [
+      { label: "Under ₹50L", value: "Under ₹50L" },
+      { label: "₹50L - ₹1Cr", value: "₹50L - ₹1Cr" },
+      { label: "₹1Cr - ₹2Cr", value: "₹1Cr - ₹2Cr" },
+      { label: "₹2Cr+", value: "₹2Cr+" }
+    ]
+  },
+  timeline: {
+    text_en: "How soon are you planning to sell the property?",
+    text_hi: "आप अपनी प्रॉपर्टी कब तक बेचने की योजना बना रहे हैं?",
+    text_hg: "Aap apni property kab tak sell karne ka plan kar rahe hain?",
+    suggestions: [
+      { label: "Immediately", value: "Immediately" },
+      { label: "1-3 Months", value: "1-3 Months" },
+      { label: "3-6 Months", value: "3-6 Months" },
+      { label: "6+ Months", value: "6+ Months" }
+    ]
+  }
+};
+
 const AIManagement = () => {
   const { token } = useAuth();
   const [activeTab, setActiveTab] = useState("settings");
@@ -552,14 +628,20 @@ const AIManagement = () => {
                 const activeChip = currentRoleOptions[selectedOptionIndex] || currentRoleOptions[0];
                 const activeIntent = activeChip?.intent || (selectedRoleForOptions === "seller" ? "seller" : selectedRoleForOptions === "admin" ? "admin" : "buyer");
 
+                const isSellerContext = activeIntent === "seller" || selectedRoleForOptions === "seller";
+
                 const getQuestionText = (field, langKey) => {
                   const q = chatFlowConfig.questions?.[field];
-                  if (!q) return "";
-                  // Check if there is an intent-specific override
-                  if (activeIntent !== "general" && q[activeIntent]) {
-                    return q[activeIntent][langKey] || "";
+                  // 1. Check if there is an intent-specific override in config
+                  if (activeIntent !== "general" && q?.[activeIntent]?.[langKey]) {
+                    return q[activeIntent][langKey];
                   }
-                  return q[langKey] || "";
+                  // 2. If in seller context, provide default seller question text
+                  if (isSellerContext && defaultSellerQuestions[field]?.[langKey]) {
+                    return defaultSellerQuestions[field][langKey];
+                  }
+                  // 3. Fallback to general/buyer text
+                  return q?.[langKey] || "";
                 };
 
                 const setQuestionText = (field, langKey, val) => {
@@ -568,8 +650,9 @@ const AIManagement = () => {
                   if (activeIntent === "general") {
                     q[langKey] = val;
                   } else {
+                    const baseObj = q[activeIntent] || (isSellerContext && defaultSellerQuestions[field] ? { ...defaultSellerQuestions[field] } : { text_en: "", text_hi: "", text_hg: "", suggestions: [] });
                     q[activeIntent] = {
-                      ...(q[activeIntent] || { text_en: "", text_hi: "", text_hg: "", suggestions: [] }),
+                      ...baseObj,
                       [langKey]: val
                     };
                   }
@@ -579,21 +662,24 @@ const AIManagement = () => {
 
                 const getSuggestionsList = (field) => {
                   const q = chatFlowConfig.questions?.[field];
-                  if (!q) return [];
-                  if (activeIntent !== "general" && q[activeIntent]) {
-                    return q[activeIntent].suggestions || [];
+                  if (activeIntent !== "general" && q?.[activeIntent]?.suggestions && q[activeIntent].suggestions.length > 0) {
+                    return q[activeIntent].suggestions;
                   }
-                  return q.suggestions || [];
+                  if (isSellerContext && defaultSellerQuestions[field]?.suggestions && defaultSellerQuestions[field].suggestions.length > 0) {
+                    return defaultSellerQuestions[field].suggestions;
+                  }
+                  return q?.suggestions || [];
                 };
 
                 const setSuggestionsList = (field, list) => {
                   const questions = { ...chatFlowConfig.questions };
-                  const q = { ...questions[field] };
+                  const q = { ...(questions[field] || {}) };
                   if (activeIntent === "general") {
                     q.suggestions = list;
                   } else {
+                    const baseObj = q[activeIntent] || (isSellerContext && defaultSellerQuestions[field] ? { ...defaultSellerQuestions[field] } : { text_en: "", text_hi: "", text_hg: "", suggestions: [] });
                     q[activeIntent] = {
-                      ...(q[activeIntent] || { text_en: "", text_hi: "", text_hg: "", suggestions: [] }),
+                      ...baseObj,
                       suggestions: list
                     };
                   }

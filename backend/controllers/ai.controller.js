@@ -148,23 +148,108 @@ const detectCityFromMessage = (msg) => {
   return null;
 };
 
-// Localized Default Question Texts Helper (Corrected contextual phrasings)
+// Localized Default Question Texts Helper (Contextual seller vs buyer phrasings)
 const getLocalizedQuestionText = (field, intent, lang, customConfig) => {
   const isHindi = lang === 'hindi';
   const isHinglish = lang === 'hinglish';
-
-  if (customConfig && customConfig.questions && customConfig.questions[field]) {
-    const qRoot = customConfig.questions[field];
-    let q = qRoot;
-    if (intent && qRoot[intent]) {
-      q = qRoot[intent];
-    }
-    if (isHindi) return q.text_hi || qRoot.text_hi || q.text_en || qRoot.text_en || "";
-    if (isHinglish) return q.text_hg || qRoot.text_hg || q.text_en || qRoot.text_en || "";
-    return q.text_en || qRoot.text_en || "";
-  }
   const isSeller = intent === 'seller';
   const isRenter = intent === 'renter';
+
+  // 1. If customConfig has an override for this specific intent, use it
+  if (customConfig && customConfig.questions && customConfig.questions[field]) {
+    const qRoot = customConfig.questions[field];
+    if (intent && qRoot[intent]) {
+      const q = qRoot[intent];
+      if (isHindi && q.text_hi) return q.text_hi;
+      if (isHinglish && q.text_hg) return q.text_hg;
+      if (q.text_en) return q.text_en;
+    }
+  }
+
+  // 2. If intent is seller, always use contextual seller phrasing (asking about their existing property)
+  if (isSeller) {
+    const sellerTexts = {
+      intent: {
+        en: "Hello, Seller! How can I help with your property today?",
+        hi: "नमस्ते सेलर! आज मैं आपकी प्रॉपर्टी के संबंध में क्या मदद कर सकता हूँ?",
+        hg: "Hello Seller! Aaj main aapki property ke regarding kya help kar sakta hoon?"
+      },
+      city: {
+        en: "Where is your property located (which city)?",
+        hi: "आपकी प्रॉपर्टी किस शहर में स्थित है?",
+        hg: "Aapki property kis city me located hai?"
+      },
+      locality: {
+        en: "Which locality or area is your property located in?",
+        hi: "आपकी प्रॉपर्टी किस इलाके या क्षेत्र में स्थित है?",
+        hg: "Aapki property kis area ya locality me located hai?"
+      },
+      propertyType: {
+        en: "What type of property do you want to sell/list?",
+        hi: "आप किस प्रकार की प्रॉपर्टी बेचना या लिस्ट करना चाहते हैं?",
+        hg: "Aap kis type ki property sell ya list karna chahte hain?"
+      },
+      bedrooms: {
+        en: "How many bedrooms does your property have?",
+        hi: "आपकी प्रॉपर्टी में कितने बेडरूम हैं?",
+        hg: "Aapki property me kitne bedrooms hain?"
+      },
+      propertySize: {
+        en: "What is the approximate size of your property?",
+        hi: "आपकी प्रॉपर्टी का अनुमानित आकार क्या है?",
+        hg: "Aapki property ka approximate size kya hai?"
+      },
+      budget: {
+        en: "What is your expected selling price for the property?",
+        hi: "आपकी प्रॉपर्टी का अपेक्षित विक्रय मूल्य क्या है?",
+        hg: "Aapka expected selling price kya hai?"
+      },
+      timeline: {
+        en: "How soon are you planning to sell the property?",
+        hi: "आप अपनी प्रॉपर्टी कब तक बेचने की योजना बना रहे हैं?",
+        hg: "Aap apni property kab tak sell karne ka plan kar rahe hain?"
+      },
+      email: {
+        en: "What email address can we use to contact you?",
+        hi: "हम आपसे संपर्क करने के लिए किस ईमेल पते का उपयोग कर सकते हैं?",
+        hg: "Hum aapko contact karne ke liye kis email address ka use kar sakte hain?"
+      },
+      phone: {
+        en: "Thanks! And what phone number is best for you?",
+        hi: "धन्यवाद! और आपके लिए कौन सा फ़ोन नंबर सबसे अच्छा रहेगा?",
+        hg: "Thanks! Aur contact karne ke liye aapka phone number kya hai?"
+      }
+    };
+    if (sellerTexts[field]) {
+      if (isHindi) return sellerTexts[field].hi;
+      if (isHinglish) return sellerTexts[field].hg;
+      return sellerTexts[field].en;
+    }
+  }
+
+  // 3. If intent is renter, use renter phrasing
+  if (isRenter) {
+    const renterTexts = {
+      budget: {
+        en: "What monthly rent budget are you hoping to stay within?",
+        hi: "आप मासिक किराए का कितना बजट रखना चाहते हैं?",
+        hg: "Aapka monthly rent budget kitna hai?"
+      }
+    };
+    if (renterTexts[field]) {
+      if (isHindi) return renterTexts[field].hi;
+      if (isHinglish) return renterTexts[field].hg;
+      return renterTexts[field].en;
+    }
+  }
+
+  // 4. Fallback to customConfig root question text (for buyer/general)
+  if (customConfig && customConfig.questions && customConfig.questions[field]) {
+    const qRoot = customConfig.questions[field];
+    if (isHindi && qRoot.text_hi) return qRoot.text_hi;
+    if (isHinglish && qRoot.text_hg) return qRoot.text_hg;
+    if (qRoot.text_en) return qRoot.text_en;
+  }
   
   const texts = {
     intent: {
@@ -173,24 +258,24 @@ const getLocalizedQuestionText = (field, intent, lang, customConfig) => {
       hg: "Main aaj aapki kya help kar sakta hoon? Please neeche diye options me se ek select karein:"
     },
     propertyType: {
-      en: isSeller ? "What type of property do you want to list?" : "What type of property are you looking for?",
-      hi: isSeller ? "आप किस प्रकार की प्रॉपर्टी लिस्ट करना चाहते हैं?" : "आप किस प्रकार की प्रॉपर्टी तलाश रहे हैं?",
-      hg: isSeller ? "Aap kis type ki property list karna chahte hain?" : "Aap kis type ki property search kar rahe hain?"
+      en: "What type of property are you looking for?",
+      hi: "आप किस प्रकार की प्रॉपर्टी तलाश रहे हैं?",
+      hg: "Aap kis type ki property search kar rahe hain?"
     },
     city: {
-      en: isSeller ? "Where is your property located (which city)?" : "Which city are you looking in?",
-      hi: isSeller ? "आपकी प्रॉपर्टी किस शहर में स्थित है?" : "आप किस शहर में तलाश कर रहे हैं?",
-      hg: isSeller ? "Aapki property kis city me located hai?" : "Aap kis city me property dekh rahe hain?"
+      en: "Which city are you looking in?",
+      hi: "आप किस शहर में तलाश कर रहे हैं?",
+      hg: "Aap kis city me property dekh rahe hain?"
     },
     locality: {
-      en: isSeller ? "Where is your property located (which area/locality)?" : "Which area/locality are you considering?",
-      hi: isSeller ? "आपकी प्रॉपर्टी किस इलाके या क्षेत्र में स्थित है?" : "आप किस इलाके या क्षेत्र पर विचार कर रहे हैं?",
-      hg: isSeller ? "Aapki property kis area/locality me located hai?" : "Aap kis area/locality me property dekh rahe hain?"
+      en: "Which area/locality are you considering?",
+      hi: "आप किस इलाके या क्षेत्र पर विचार कर रहे हैं?",
+      hg: "Aap kis area/locality me property dekh rahe hain?"
     },
     bedrooms: {
-      en: isSeller ? "How many bedrooms does your property have?" : "How many bedrooms do you need?",
-      hi: isSeller ? "आपकी प्रॉपर्टी में कितने बेडरूम हैं?" : "आपको कितने बेडरूम की आवश्यकता है?",
-      hg: isSeller ? "Aapki property me kitne bedrooms hain?" : "Aapko kitne bedrooms chahiye?"
+      en: "How many bedrooms do you need?",
+      hi: "आपको कितने बेडरूम की आवश्यकता है?",
+      hg: "Aapko kitne bedrooms chahiye?"
     },
     propertySize: {
       en: "What is the approximate size of your property?",
@@ -198,20 +283,14 @@ const getLocalizedQuestionText = (field, intent, lang, customConfig) => {
       hg: "Aapki property ka approximate size kya hai?"
     },
     budget: {
-      en: isSeller 
-        ? "What expected price range do you want to list it for?" 
-        : (isRenter ? "What monthly rent budget are you hoping to stay within?" : "What price range are you hoping to stay within?"),
-      hi: isSeller
-        ? "आप इसे किस अपेक्षित मूल्य सीमा में लिस्ट करना चाहते हैं?"
-        : (isRenter ? "आप मासिक किराए का कितना बजट रखना चाहते हैं?" : "आप किस मूल्य सीमा में प्रॉपर्टी देखना चाहते हैं?"),
-      hg: isSeller
-        ? "Aap ise kis price range me list karna chahte hain?"
-        : (isRenter ? "Aapka monthly rent budget kitna hai?" : "Aap kis budget range me property dekh rahe hain?")
+      en: "What price range are you hoping to stay within?",
+      hi: "आप किस मूल्य सीमा में प्रॉपर्टी देखना चाहते हैं?",
+      hg: "Aap kis budget range me property dekh rahe hain?"
     },
     timeline: {
-      en: isSeller ? "What is your timeframe for selling the property?" : "What is your desired timeframe for booking the property?",
-      hi: isSeller ? "प्रॉपर्टी बेचने की आपकी संभावित समय-सीमा क्या है?" : "प्रॉपर्टी बुक करने की आपकी संभावित समय-सीमा क्या है?",
-      hg: isSeller ? "Property sell karne ka aapka expected timeframe kya hai?" : "Property book karne ka aapka expected timeframe kya hai?"
+      en: "What is your desired timeframe for booking the property?",
+      hi: "प्रॉपर्टी बुक करने की आपकी संभावित समय-सीमा क्या है?",
+      hg: "Property book karne ka aapka expected timeframe kya hai?"
     },
     email: {
       en: "What email address can we use to contact you?",
@@ -238,6 +317,20 @@ const getSuggestionsForField = (field, intent, customConfig, defaultSuggestions)
     if (intent && qRoot[intent] && Array.isArray(qRoot[intent].suggestions) && qRoot[intent].suggestions.length > 0) {
       return qRoot[intent].suggestions;
     }
+  }
+  if (intent === 'seller') {
+    if (field === 'propertyType') {
+      return [
+        { label: "Flat/Apartment", value: "apartment" },
+        { label: "Villa/House", value: "house" },
+        { label: "Penthouse", value: "penthouse" },
+        { label: "Commercial property", value: "commercial" },
+        { label: "Plot / Land", value: "plot" }
+      ];
+    }
+  }
+  if (customConfig && customConfig.questions && customConfig.questions[field]) {
+    const qRoot = customConfig.questions[field];
     if (Array.isArray(qRoot.suggestions) && qRoot.suggestions.length > 0) {
       return qRoot.suggestions;
     }
@@ -440,20 +533,39 @@ export const chatWithAssistant = async (req, res) => {
 
     const state = { ...defaultState, ...currentState };
 
-    // Automatic page navigation router
+    // Check if message matches any welcome option or qualification flow starter across all roles
+    let isFlowOptionMatch = false;
+    if (customConfig && customConfig.options) {
+      const allOpts = [
+        ...(customConfig.options.buyer || []),
+        ...(customConfig.options.seller || []),
+        ...(customConfig.options.admin || []),
+        ...(Array.isArray(customConfig.options) ? customConfig.options : [])
+      ];
+      const cleanMsg = message.trim().toLowerCase();
+      isFlowOptionMatch = allOpts.some(o => 
+        (o.value && o.value.trim().toLowerCase() === cleanMsg) ||
+        (o.label && o.label.trim().toLowerCase() === cleanMsg)
+      );
+    }
     const lowerMessage = message.toLowerCase();
+    const isStarterText = lowerMessage === "sell a home" || lowerMessage === "buy a home" || lowerMessage === "what is my home worth?" || lowerMessage === "what is my home worth" || lowerMessage === "rent a property" || lowerMessage === "i'm looking for a rental" || lowerMessage === "speak with an agent";
+    const isFlowQualificationStarter = isFlowOptionMatch || isStarterText;
+
+    // Automatic page navigation router (only runs if message is NOT a qualification flow starter)
     let redirectPath = null;
     let redirectText = null;
 
-    if (lowerMessage.includes("admin panel") || lowerMessage.includes("admin dashboard") || (lowerMessage.includes("admin") && (lowerMessage.includes("open") || lowerMessage.includes("page")))) {
-      redirectPath = "/admin-dashboard";
-      redirectText = "Sure, opening the Admin Dashboard for you now.";
-    } else if (lowerMessage.includes("seller dashboard") || lowerMessage.includes("seller panel") || (userRole === "seller" && lowerMessage.includes("dashboard") && lowerMessage.includes("open"))) {
-      redirectPath = "/dashboard";
-      redirectText = "Sure, opening the Seller Dashboard for you now.";
-    } else if (lowerMessage.includes("add property") || lowerMessage.includes("add listing") || lowerMessage.includes("list a property") || lowerMessage.includes("property add") || lowerMessage.includes("list property") || lowerMessage.includes("sell a home")) {
-      redirectPath = "/add-property";
-      redirectText = "Opening the Add Property page for you.";
+    if (!isFlowQualificationStarter) {
+      if (lowerMessage.includes("admin panel") || lowerMessage.includes("admin dashboard") || (lowerMessage.includes("admin") && (lowerMessage.includes("open") || lowerMessage.includes("page")))) {
+        redirectPath = "/admin-dashboard";
+        redirectText = "Sure, opening the Admin Dashboard for you now.";
+      } else if (lowerMessage.includes("seller dashboard") || lowerMessage.includes("seller panel") || (userRole === "seller" && lowerMessage.includes("dashboard") && lowerMessage.includes("open"))) {
+        redirectPath = "/dashboard";
+        redirectText = "Sure, opening the Seller Dashboard for you now.";
+      } else if (lowerMessage.includes("add property") || lowerMessage.includes("add listing") || lowerMessage.includes("list a property") || lowerMessage.includes("property add") || lowerMessage.includes("list property")) {
+        redirectPath = "/add-property";
+        redirectText = "Opening the Add Property page for you.";
     } else if (lowerMessage.includes("my properties") || lowerMessage.includes("my listing") || lowerMessage.includes("meri property") || lowerMessage.includes("my listed") || (lowerMessage.includes("listings") && (lowerMessage.includes("open") || lowerMessage.includes("page")))) {
       redirectPath = "/my-properties";
       redirectText = "Opening your listed properties list.";
@@ -494,6 +606,7 @@ export const chatWithAssistant = async (req, res) => {
       redirectPath = "/";
       redirectText = "Opening the homepage.";
     }
+  }
 
     if (redirectPath) {
       // Localized speech/display replies
@@ -1428,6 +1541,14 @@ export const chatWithAssistant = async (req, res) => {
         
         LANGUAGE INSTRUCTIONS:
         ${languageInstruction}
+
+        ROLE & PERSPECTIVE GUIDELINES:
+        ${state.intent === 'seller' || userRole === 'seller'
+          ? `CRITICAL PERSPECTIVE: The user is a PROPERTY SELLER / OWNER who wants to sell or get a valuation for their existing property. NEVER treat them as a buyer. NEVER ask them what property they are "looking for", "searching for", or "exploring to buy". Instead, acknowledge their property listing/valuation goal and ask about where their property is situated, its details, or its expected selling price.` 
+          : state.intent === 'renter'
+          ? `CRITICAL PERSPECTIVE: The user wants to rent a home/property (tenant).`
+          : `CRITICAL PERSPECTIVE: The user is a home BUYER looking to purchase property.`
+        }
 
         GENERAL INSTRUCTIONS:
         1. Write a natural-sounding, helpful reply that acknowledges the user's previous answer (if appropriate) and transitions smoothly into asking the next question.
