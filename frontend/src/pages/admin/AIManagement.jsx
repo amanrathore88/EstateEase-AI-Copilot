@@ -130,6 +130,12 @@ const defaultFlowConfig = {
         { label: "3-6 Months", value: "3-6 Months" },
         { label: "6+ Months", value: "6+ Months" }
       ]
+    },
+    offTopic: {
+      text_en: "I'm sorry, but I don't have information on that topic. I am EstateEase AI, specialized exclusively in real estate, property search, sales, rentals, and platform navigation. How can I assist you with your property needs today?",
+      text_hi: "क्षमा करें, मेरे पास इस बारे में कोई जानकारी नहीं है। मैं EstateEase AI हूँ और केवल रियल एस्टेट, प्रॉपर्टी (खरीदने, बेचने, किराए पर लेने) और प्लेटफ़ॉर्म नेविगेशन से जुड़े सवालों में ही आपकी मदद कर सकता हूँ। आज प्रॉपर्टी में मैं आपकी क्या सहायता करूँ?",
+      text_hg: "Sorry, mere paas is bare me information nahi hai. Main EstateEase AI hoon aur sirf real estate ya property (buy, sell, rent ya listings) se related queries me hi aapki help kar sakta hoon. Aaj property search ya sale me main aapki kya help karoon?",
+      suggestions: []
     }
   }
 };

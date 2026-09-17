@@ -301,6 +301,11 @@ const getLocalizedQuestionText = (field, intent, lang, customConfig) => {
       en: "Thanks! And what phone number is best for you?",
       hi: "धन्यवाद! और आपके लिए कौन सा फ़ोन नंबर सबसे अच्छा रहेगा?",
       hg: "Thanks! Aur contact karne ke liye aapka phone number kya hai?"
+    },
+    offTopic: {
+      en: "I'm sorry, but I don't have information on that topic. I am EstateEase AI, specialized exclusively in real estate, property search, sales, rentals, and platform navigation. How can I assist you with your property needs today?",
+      hi: "क्षमा करें, मेरे पास इस बारे में कोई जानकारी नहीं है। मैं EstateEase AI हूँ और केवल रियल एस्टेट, प्रॉपर्टी (खरीदने, बेचने, किराए पर लेने) और प्लेटफ़ॉर्म नेविगेशन से जुड़े सवालों में ही आपकी मदद कर सकता हूँ। आज प्रॉपर्टी में मैं आपकी क्या सहायता करूँ?",
+      hg: "Sorry, mere paas is bare me information nahi hai. Main EstateEase AI hoon aur sirf real estate ya property (buy, sell, rent ya listings) se related queries me hi aapki help kar sakta hoon. Aaj property search ya sale me main aapki kya help karoon?"
     }
   };
 
@@ -492,6 +497,152 @@ const saveLeadFromState = async (state, user) => {
   }
 };
 
+// Intent Suggestions Default Helper based on userRole
+export const getDefaultIntentSuggestions = (userRole = 'buyer', customConfig = null) => {
+  let suggestions = [];
+  if (customConfig && customConfig.options) {
+    if (customConfig.options[userRole]) {
+      suggestions = customConfig.options[userRole];
+    } else if (Array.isArray(customConfig.options) && userRole === 'buyer') {
+      suggestions = customConfig.options;
+    }
+  }
+
+  if (!suggestions || suggestions.length === 0) {
+    if (userRole === 'admin') {
+      suggestions = [
+        { label: "📊 Show platform stats", value: "Show platform stats" },
+        { label: "👥 Review pending sellers", value: "Review pending sellers" },
+        { label: "🏠 Check active listings", value: "Check active listings" }
+      ];
+    } else if (userRole === 'seller') {
+      suggestions = [
+        { label: "💰 What is my home worth?", value: "What is my home worth?" },
+        { label: "🏠 Sell a home", value: "Sell a home" },
+        { label: "👤 Speak with an agent", value: "Speak with an agent" }
+      ];
+    } else {
+      suggestions = [
+        { label: "🏠 Buy a home", value: "Buy a home" },
+        { label: "🏡 I'm looking for a rental", value: "I'm looking for a rental" },
+        { label: "👤 Speak with an agent", value: "Speak with an agent" },
+        { label: "🔑 Rent a Property", value: "Rent a Property" }
+      ];
+    }
+  }
+  return suggestions;
+};
+
+// Fast Domain Guardrail: Detects off-topic/non-real-estate messages to protect AI quota & state
+export const isOffTopicMessage = (message) => {
+  if (!message || typeof message !== 'string') return false;
+  const msg = message.toLowerCase().trim();
+
+  // If message contains real estate domain terms, do NOT treat as off-topic
+  const realEstateKeywords = /\b(property|properties|flat|flats|apartment|apartments|villa|villas|house|houses|ghar|plot|plots|real estate|estateease|broker|dealer|realtor|tenant|landlord|kiraya|kiraye|kirape|bechna|bechne|kharidna|khareedna|kharidne|registry|stamp duty|bhk|possession|builder|society|locality|rera|home loan|mortgage|site visit|floors?|penthouse|duplex|studio|commercial|residential|listing|listings|inquiry|inquiries|lead|leads|sq\s*ft|square feet|gaj|acre|bedroom|bathrooms?)\b|प्रॉपर्टी|फ्लैट|मकान|घर|प्लॉट|किराया|बिक्री|दुकान|बिल्डर/i;
+  
+  if (realEstateKeywords.test(msg)) {
+    return false;
+  }
+
+  // Off-topic categories (Latin and Devanagari script)
+  const offTopicPatterns = [
+    // 1. Cryptocurrencies and Web3
+    /\b(bitcoin|btc|ethereum|eth|dogecoin|doge|crypto|cryptocurrency|crypto currency|solana|binance|blockchain|altcoin|satoshi|nft|nfts|web3|mining)\b|बिटकॉइन|क्रिप्टो/i,
+    
+    // 2. Financial markets & Stock trading & Commodities (non-real-estate)
+    /\b(stock market|share market|nifty|sensex|forex|mutual fund|mutual funds|sip|option trading|intraday|equity market|demat|crypto trading|gold price|silver price|petrol price|diesel price)\b|शेयर बाज़ार|शेयर बाजार|निफ्टी|सेंसेक्स/i,
+    
+    // 3. Weather & Climate
+    /\b(weather|mausam|barish|forecast|rainfall|temperature today|garmi|sardi|rain forecast|humidity)\b|मौसम|बारिश|तापमान/i,
+    
+    // 4. Sports & Gaming
+    /\b(cricket|ipl|virat kohli|dhoni|rohit sharma|world cup|football|messi|ronaldo|fifa|tennis|badminton|pubg|bgmi|free fire|playstation|xbox|gta|chess|kabaddi|match score)\b|क्रिकेट|मैच|आईपीएल|फुटबॉल/i,
+    
+    // 5. Entertainment, Movies, Music, Celebrities
+    /\b(bollywood|hollywood|movie|cinema|film|actor|actress|shah rukh|salman khan|netflix|box office|trailer|release date|song|gaana|gana|singer|celebrity)\b|फिल्म|मूवी|गाना|सिनेमा/i,
+    
+    // 6. Programming, Coding, Homework, Jokes, Poems
+    /\b(write code|python code|javascript code|java code|c\+\+|debug this|homework|math problem|solve equation|write an essay|write essay|poem|shayari|joke|jokes|chutkula|chutkule|riddle|riddles|chatgpt|openai)\b|जोक|चुटकुला|कविता|शायरी/i,
+    
+    // 7. Politics, Non-real-estate Government & Wars
+    /\b(narendra modi|rahul gandhi|bjp|congress|election result|prime minister|president of|ukraine war|russia war|israel|gaza|parliament|lok sabha|rajya sabha)\b|चुनाव|प्रधानमंत्री|राष्ट्रपति/i,
+    
+    // 8. Health, Medical & Wellness
+    /\b(medicine for|headache|fever|cough syrup|symptoms of|weight loss diet|workout plan|diet plan|doctor recommendation|paracetamol)\b|दवा|सिरदर्द|बुखार/i,
+    
+    // 9. Cooking & Recipes
+    /\b(recipe|kaise banaye|how to cook|biryani|paneer|pizza recipe|cake recipe|maggi|pasta)\b|रेसिपी|खाना बनाना/i,
+    
+    // 10. Astrology, Horoscopes & Religion
+    /\b(horoscope|kundali|rashifal|zodiac sign|astrology)\b|कुंडली|राशिफल|ज्योतिष/i,
+    
+    // 11. General Trivia / Non-real-estate Knowledge
+    /\b(capital of|who is the richest|tallest mountain|speed of light|who invented|distance to moon|currency of|population of)\b/i
+  ];
+
+  return offTopicPatterns.some(pattern => pattern.test(msg));
+};
+
+// Pure Greeting Detection: Saves 2 Gemini calls on "Hi", "Hello", "Namaste"
+export const isPureGreeting = (message) => {
+  if (!message || typeof message !== 'string') return false;
+  const msg = message.toLowerCase().trim().replace(/[!?.,]/g, '');
+  const greetingRegex = /^(hi|hello|hey|namaste|namaskar|pranam|good morning|good afternoon|good evening|greetings|hola|sup|yo|hii+|heyy+)$/i;
+  return greetingRegex.test(msg);
+};
+
+// Standardized Off-Topic Response Generator
+export const buildOffTopicResponse = (state, currentState, userRole, language, customConfig) => {
+  const intentSuggestions = getDefaultIntentSuggestions(userRole, customConfig);
+  
+  let offTopicDisplay = "";
+  let offTopicSpeech = "";
+  let returnActiveQuestion = null;
+
+  const prevField = currentState?.activeQuestion?.field;
+  const isMidFlow = prevField && prevField !== "intent" && prevField !== "complete" && state.intent;
+
+  if (isMidFlow) {
+    const pendingQuestionText = currentState?.activeQuestion?.text || getLocalizedQuestionText(prevField, state.intent, language, customConfig);
+    if (language === 'hindi') {
+      offTopicDisplay = `क्षमा करें, मेरे पास इस विषय की जानकारी नहीं है। मैं EstateEase AI हूँ और केवल रियल एस्टेट तथा प्रॉपर्टी से जुड़े सवालों में ही आपकी मदद कर सकता हूँ।\n\nआइए आपकी प्रॉपर्टी पूछताछ पर वापस आते हैं:\n${pendingQuestionText}`;
+      offTopicSpeech = `क्षमा करें, मेरे पास इस विषय की जानकारी नहीं है। आइए आपकी प्रॉपर्टी पूछताछ पर वापस आते हैं: ${pendingQuestionText}`;
+    } else if (language === 'hinglish') {
+      offTopicDisplay = `Sorry, mere paas is topic ki information nahi hai. Main EstateEase AI hoon aur sirf real estate ya property (buy, sell, rent) se related queries me hi aapki help kar sakta hoon.\n\nChaliye aapki property inquiry par wapas aate hain:\n${pendingQuestionText}`;
+      offTopicSpeech = `[SPEECH] सॉरी, मेरे पास इस विषय की जानकारी नहीं है। आइए आपकी प्रॉपर्टी पूछताछ पर वापस आते हैं: ${pendingQuestionText}`;
+    } else {
+      offTopicDisplay = `I'm sorry, but I don't have information on that topic. I am EstateEase AI, specialized exclusively in real estate, property search, sales, and rentals.\n\nLet's return to your property inquiry:\n${pendingQuestionText}`;
+      offTopicSpeech = `I am sorry, but I do not have information on that topic. Let us return to your property inquiry: ${pendingQuestionText}`;
+    }
+    returnActiveQuestion = currentState.activeQuestion;
+  } else {
+    const offTopicText = getLocalizedQuestionText("offTopic", null, language, customConfig);
+    offTopicDisplay = offTopicText;
+    if (language === 'hinglish') {
+      offTopicSpeech = `[SPEECH] ${getLocalizedQuestionText("offTopic", null, 'hindi', customConfig)}`;
+    } else {
+      offTopicSpeech = offTopicText;
+    }
+    returnActiveQuestion = {
+      field: "intent",
+      text: getLocalizedQuestionText("intent", state.intent, language, customConfig),
+      type: "single_select",
+      required: true,
+      suggestions: intentSuggestions
+    };
+  }
+
+  return {
+    success: true,
+    reply: offTopicDisplay,
+    speechReply: offTopicSpeech,
+    activeQuestion: returnActiveQuestion,
+    state,
+    properties: []
+  };
+};
+
 // 3. Stateful AI Chat Assistant
 export const chatWithAssistant = async (req, res) => {
   try {
@@ -551,6 +702,42 @@ export const chatWithAssistant = async (req, res) => {
     const lowerMessage = message.toLowerCase();
     const isStarterText = lowerMessage === "sell a home" || lowerMessage === "buy a home" || lowerMessage === "what is my home worth?" || lowerMessage === "what is my home worth" || lowerMessage === "rent a property" || lowerMessage === "i'm looking for a rental" || lowerMessage === "speak with an agent";
     const isFlowQualificationStarter = isFlowOptionMatch || isStarterText;
+
+    // 1. Fast Off-Topic / Out-of-Domain Guardrail Filter (Short-circuits without burning Gemini API quota)
+    if (message && !isFlowQualificationStarter && isOffTopicMessage(message)) {
+      return res.json(buildOffTopicResponse(state, currentState, userRole, language, customConfig));
+    }
+
+    // 2. Pure Greeting Shortcut (Saves 2 Gemini calls on "Hi", "Hello", "Namaste" when in initial state)
+    if (message && !isFlowQualificationStarter && isPureGreeting(message) && (!state.intent || state.leadCaptureStage === 'initial')) {
+      const intentSuggestions = getDefaultIntentSuggestions(userRole, customConfig);
+      let greetingDisplay = "";
+      let greetingSpeech = "";
+      if (language === 'hindi') {
+        greetingDisplay = "नमस्ते! मैं EstateEase AI हूँ, आपका रियल एस्टेट सहायक। आज मैं आपकी क्या मदद कर सकता हूँ? कृपया नीचे दिए गए विकल्पों में से एक चुनें:";
+        greetingSpeech = "नमस्ते! मैं EstateEase AI हूँ। आज मैं आपकी क्या मदद कर सकता हूँ? कृपया नीचे दिए गए विकल्पों में से एक चुनें:";
+      } else if (language === 'hinglish') {
+        greetingDisplay = "Hello! Main EstateEase AI hoon, aapka real estate assistant. Aaj main aapki property search, buy, sell ya rent me kaise help kar sakta hoon? Please neeche diye gaye options me se select karein:";
+        greetingSpeech = "[SPEECH] हेलो! मैं EstateEase AI हूँ। आज मैं आपकी प्रॉपर्टी सर्च, खरीदने या बेचने में कैसे मदद कर सकता हूँ? कृपया नीचे दिए गए विकल्पों में से चुनें:";
+      } else {
+        greetingDisplay = "Hello! I am EstateEase AI, your personal real estate assistant. How can I assist you with your property needs today? Please choose an option below:";
+        greetingSpeech = "Hello! I am EstateEase AI, your personal real estate assistant. How can I assist you with your property needs today? Please choose an option below:";
+      }
+      return res.json({
+        success: true,
+        reply: greetingDisplay,
+        speechReply: greetingSpeech,
+        activeQuestion: {
+          field: "intent",
+          text: getLocalizedQuestionText("intent", state.intent, language, customConfig),
+          type: "single_select",
+          required: true,
+          suggestions: intentSuggestions
+        },
+        state,
+        properties: []
+      });
+    }
 
     // Automatic page navigation router (only runs if message is NOT a qualification flow starter)
     let redirectPath = null;
@@ -807,7 +994,8 @@ export const chatWithAssistant = async (req, res) => {
       email: null,
       phone: null,
       name: null,
-      userQueryOverride: null
+      userQueryOverride: null,
+      isOffTopic: false
     };
 
     // If message is not empty, run Gemini to extract parameters
@@ -836,7 +1024,10 @@ export const chatWithAssistant = async (req, res) => {
          - budget: extract the budget text as a clean string (e.g. "Under ₹50L", "₹50L - ₹1Cr", "₹1Cr - ₹2Cr", "₹2Cr+", or rent price).
          - propertySize: e.g. "Under 1,000 sq ft", "1,000–1,500 sq ft", "1,500–2,500 sq ft", "2,500+ sq ft"
       4. userQueryOverride: If the user is asking a specific question, query, or deviating from providing qualification info (e.g., asking about parking, listing details, legal fees, or general real estate help) rather than answering the qualification fields, capture their natural question query here, otherwise return null.
-      5. If no information is found for a field, return null. Do not guess or make up details.
+      5. isOffTopic: Determine whether the user's message is COMPLETELY UNRELATED to real estate, properties, housing, home valuation, mortgages/loans, renting/buying/selling homes, or navigating EstateEase platform.
+         - If the message asks about completely unrelated topics (such as cryptocurrencies, stocks, weather, sports, movies, coding/programming, homework, cooking, medical advice, general trivia): set isOffTopic to true.
+         - If the message is a greeting, property query, platform inquiry, or answering our qualification questions: set isOffTopic to false.
+      6. If no information is found for a field, return null. Do not guess or make up details.
       `;
 
       const extractSchema = {
@@ -853,7 +1044,8 @@ export const chatWithAssistant = async (req, res) => {
           email: { type: "STRING", nullable: true },
           phone: { type: "STRING", nullable: true },
           name: { type: "STRING", nullable: true },
-          userQueryOverride: { type: "STRING", nullable: true }
+          userQueryOverride: { type: "STRING", nullable: true },
+          isOffTopic: { type: "BOOLEAN", nullable: true }
         }
       };
 
@@ -870,6 +1062,11 @@ export const chatWithAssistant = async (req, res) => {
         if (result) extracted = result;
       } catch (err) {
         console.warn("Failed to generate JSON for entity extraction, continuing with defaults:", err.message);
+      }
+
+      // If Gemini NLU flagged the query as completely off-topic, short-circuit immediately
+      if (extracted && extracted.isOffTopic) {
+        return res.json(buildOffTopicResponse(state, currentState, userRole, language, customConfig));
       }
     }
 
@@ -945,13 +1142,13 @@ export const chatWithAssistant = async (req, res) => {
         state.intent = matchedOpt.intent;
       } else if (customConfig && customConfig.flows && customConfig.flows[msg]) {
         state.intent = msg;
-      } else if (msg.includes("worth") || msg.includes("sell") || msg.includes("💰") || msg.includes("🤔")) {
+      } else if (/\b(worth|valuation|sell|selling|bechna|bechne)\b/i.test(msg) || msg.includes("💰") || msg.includes("🤔")) {
         state.intent = "seller";
-      } else if (msg.includes("buy") || msg.includes("🏠") || msg.includes("purchase")) {
+      } else if (/\b(buy|buying|purchase|purchasing|kharidna|khareedna|kharidne)\b/i.test(msg) || msg.includes("🏠")) {
         state.intent = "buyer";
-      } else if (msg.includes("rental") || msg.includes("rent") || msg.includes("🏡")) {
+      } else if (/\b(rental|rent|renting|kiraya|kiraye|kirape)\b/i.test(msg) || msg.includes("🏡")) {
         state.intent = "renter";
-      } else if (msg.includes("speak") || msg.includes("agent") || msg.includes("👤")) {
+      } else if (/\b(speak|agent|broker|representative)\b/i.test(msg) || msg.includes("👤")) {
         state.intent = "agent";
       }
     }
@@ -962,10 +1159,10 @@ export const chatWithAssistant = async (req, res) => {
       state.city = currentMsgCity;
     } else if (!state.city && message) {
       const msg = message.toLowerCase();
-      if (msg.includes("delhi")) state.city = "Delhi";
-      else if (msg.includes("noida")) state.city = "Noida";
-      else if (msg.includes("gurgaon") || msg.includes("gurugram")) state.city = "Gurugram";
-      else if (msg.includes("mumbai") || msg.includes("bombay")) state.city = "Mumbai";
+      if (/\b(delhi|new delhi)\b/i.test(msg)) state.city = "Delhi";
+      else if (/\b(noida|greater noida)\b/i.test(msg)) state.city = "Noida";
+      else if (/\b(gurgaon|gurugram)\b/i.test(msg)) state.city = "Gurugram";
+      else if (/\b(mumbai|bombay)\b/i.test(msg)) state.city = "Mumbai";
     }
 
     // Search bypass detection
@@ -991,10 +1188,10 @@ export const chatWithAssistant = async (req, res) => {
       if (prevField && prevField !== "complete") {
         if (prevField === "intent" && !state.intent) {
           const msg = message.toLowerCase();
-          if (msg.includes("worth") || msg.includes("sell")) state.intent = "seller";
-          else if (msg.includes("buy")) state.intent = "buyer";
-          else if (msg.includes("rental") || msg.includes("rent")) state.intent = "renter";
-          else if (msg.includes("speak") || msg.includes("agent")) state.intent = "agent";
+          if (/\b(worth|valuation|sell|bechna)\b/i.test(msg)) state.intent = "seller";
+          else if (/\b(buy|purchase|kharidna|khareedna)\b/i.test(msg)) state.intent = "buyer";
+          else if (/\b(rental|rent|renting|kiraya)\b/i.test(msg)) state.intent = "renter";
+          else if (/\b(speak|agent)\b/i.test(msg)) state.intent = "agent";
         } else if (!state[prevField]) {
           state[prevField] = message;
         }
@@ -1077,37 +1274,7 @@ export const chatWithAssistant = async (req, res) => {
     }
 
     // Set default intent suggestions based on userRole
-    let intentSuggestions = [];
-    if (customConfig && customConfig.options) {
-      if (customConfig.options[userRole]) {
-        intentSuggestions = customConfig.options[userRole];
-      } else if (Array.isArray(customConfig.options) && userRole === 'buyer') {
-        intentSuggestions = customConfig.options;
-      }
-    }
-
-    if (!intentSuggestions || intentSuggestions.length === 0) {
-      if (userRole === 'admin') {
-        intentSuggestions = [
-          { label: "📊 Show platform stats", value: "Show platform stats" },
-          { label: "👥 Review pending sellers", value: "Review pending sellers" },
-          { label: "🏠 Check active listings", value: "Check active listings" }
-        ];
-      } else if (userRole === 'seller') {
-        intentSuggestions = [
-          { label: "💰 What is my home worth?", value: "What is my home worth?" },
-          { label: "🏠 Sell a home", value: "Sell a home" },
-          { label: "👤 Speak with an agent", value: "Speak with an agent" }
-        ];
-      } else {
-        intentSuggestions = [
-          { label: "🏠 Buy a home", value: "Buy a home" },
-          { label: "🏡 I'm looking for a rental", value: "I'm looking for a rental" },
-          { label: "👤 Speak with an agent", value: "Speak with an agent" },
-          { label: "🔑 Rent a Property", value: "Rent a Property" }
-        ];
-      }
-    }
+    const intentSuggestions = getDefaultIntentSuggestions(userRole, customConfig);
 
     const questionMap = {
       intent: {
