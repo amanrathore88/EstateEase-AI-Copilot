@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { generateTextWithGroq, generateJSONWithGroq } from './groq.js';
 
 dotenv.config();
 
@@ -16,30 +17,49 @@ export const getGeminiClient = () => {
   return aiInstance;
 };
 
+const GEMINI_MODELS = [
+  'gemini-flash-lite-latest',
+  'gemini-3.6-flash',
+  'gemini-2.5-flash'
+];
+
 /**
- * Generates text using Gemini 2.5 Flash
+ * Generates text using Gemini with multi-model and Groq fallback
  * @param {string} prompt 
  * @param {string} [systemInstruction] 
  * @returns {Promise<string>}
  */
 export const generateText = async (prompt, systemInstruction = '') => {
-  try {
-    const client = getGeminiClient();
-    const config = {};
-    if (systemInstruction) {
-      config.systemInstruction = systemInstruction;
+  const client = getGeminiClient();
+  const config = {};
+  if (systemInstruction) {
+    config.systemInstruction = systemInstruction;
+  }
+
+  let lastError = null;
+  for (const model of GEMINI_MODELS) {
+    try {
+      const response = await client.models.generateContent({
+        model,
+        contents: prompt,
+        config,
+      });
+      if (response && response.text) {
+        return response.text;
+      }
+    } catch (err) {
+      lastError = err;
+      console.warn(`[Gemini] Model ${model} failed, trying next fallback:`, err.message);
     }
+  }
 
-    const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config,
-    });
-
-    return response.text;
-  } catch (error) {
-    console.error('Error generating text with Gemini:', error);
-    throw error;
+  // Fallback to Groq if all Gemini models fail or hit rate limits
+  try {
+    console.log('[Gemini Fallback] Attempting generation with Groq...');
+    return await generateTextWithGroq(prompt, systemInstruction);
+  } catch (groqErr) {
+    console.error('All AI providers failed:', groqErr);
+    throw lastError || groqErr;
   }
 };
 
@@ -74,30 +94,43 @@ export const getEmbedding = async (text) => {
 };
 
 /**
- * Generates structured JSON output
+ * Generates structured JSON output using Gemini with Groq fallback
  * @param {string} prompt 
  * @param {object} [schema] Optional JSON schema to enforce structure
  * @returns {Promise<any>}
  */
 export const generateJSON = async (prompt, schema = null) => {
-  try {
-    const client = getGeminiClient();
-    const config = {
-      responseMimeType: 'application/json',
-    };
-    if (schema) {
-      config.responseSchema = schema;
+  const client = getGeminiClient();
+  const config = {
+    responseMimeType: 'application/json',
+  };
+  if (schema) {
+    config.responseSchema = schema;
+  }
+
+  let lastError = null;
+  for (const model of GEMINI_MODELS) {
+    try {
+      const response = await client.models.generateContent({
+        model,
+        contents: prompt,
+        config,
+      });
+      if (response && response.text) {
+        return JSON.parse(response.text);
+      }
+    } catch (err) {
+      lastError = err;
+      console.warn(`[Gemini] JSON with model ${model} failed, trying next fallback:`, err.message);
     }
+  }
 
-    const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config,
-    });
-
-    return JSON.parse(response.text);
-  } catch (error) {
-    console.error('Error generating JSON with Gemini:', error);
-    throw error;
+  // Fallback to Groq if Gemini fails
+  try {
+    console.log('[Gemini Fallback] Attempting JSON generation with Groq...');
+    return await generateJSONWithGroq(prompt);
+  } catch (groqErr) {
+    console.error('All JSON AI providers failed:', groqErr);
+    throw lastError || groqErr;
   }
 };
